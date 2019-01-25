@@ -23,34 +23,33 @@ namespace Microsoft.Azure.Devices.Edge.Util
             { "fatal", LogEventLevel.Fatal }
         };
 
-        static readonly Lazy<ILoggerFactory> LoggerLazy = new Lazy<ILoggerFactory>(() => GetLoggerFactory(), true);
-        static LogEventLevel logLevel = LogEventLevel.Information;
+        static readonly Lazy<ILoggerFactory> LoggerLazy = new Lazy<ILoggerFactory>(GetLoggerFactory, true);
+        static readonly LoggingLevelSwitch LoggingLevelSwitch = new LoggingLevelSwitch();
 
         public static ILoggerFactory Factory => LoggerLazy.Value;
 
         public static void SetLogLevel(string level)
         {
             Preconditions.CheckNonWhiteSpace(level, nameof(level));
-            logLevel = LogLevelDictionary.GetOrElse(level.ToLower(), LogEventLevel.Information);
+            LogEventLevel logLevel = LogLevelDictionary.GetOrElse(level.ToLower(), LoggingLevelSwitch.MinimumLevel);
+            LoggingLevelSwitch.MinimumLevel = logLevel;
         }
 
-        public static LogEventLevel GetLogLevel() => logLevel;
+        public static LogEventLevel GetLogLevel() => LoggingLevelSwitch.MinimumLevel;
 
         static ILoggerFactory GetLoggerFactory()
         {
-            var levelSwitch = new LoggingLevelSwitch();
-            levelSwitch.MinimumLevel = logLevel;
             Serilog.Core.Logger loggerConfig = new LoggerConfiguration()
-                .MinimumLevel.ControlledBy(levelSwitch)
+                .MinimumLevel.ControlledBy(LoggingLevelSwitch)
                 .Enrich.FromLogContext()
                 .WriteTo.Console(
                     outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] - {Message}{NewLine}{Exception}").CreateLogger();
 
-            if (levelSwitch.MinimumLevel <= LogEventLevel.Debug)
+            if (LoggingLevelSwitch.MinimumLevel <= LogEventLevel.Debug)
             {
                 // Overwrite with richer content if less then debug
                 loggerConfig = new LoggerConfiguration()
-                    .MinimumLevel.ControlledBy(levelSwitch)
+                    .MinimumLevel.ControlledBy(LoggingLevelSwitch)
                     .Enrich.FromLogContext()
                     .WriteTo.Console(
                         outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{SourceContext:1}] - {Message}{NewLine}{Exception}").CreateLogger();

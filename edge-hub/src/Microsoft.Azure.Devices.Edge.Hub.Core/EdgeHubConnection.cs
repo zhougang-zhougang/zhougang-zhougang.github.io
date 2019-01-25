@@ -147,32 +147,16 @@ namespace Microsoft.Azure.Devices.Edge.Hub.Core
         internal async Task<DirectMethodResponse> HandleMethodInvocation(DirectMethodRequest request)
         {
             Preconditions.CheckNotNull(request, nameof(request));
+            Preconditions.CheckArgument(string.IsNullOrWhiteSpace(request.Name), "Received method invocation without method name");
+
             Events.MethodRequestReceived(request.Name);
             if (request.Name.Equals(Constants.ServiceIdentityRefreshMethodName, StringComparison.OrdinalIgnoreCase))
             {
-                RefreshRequest refreshRequest;
-                try
-                {
-                    refreshRequest = request.Data.FromBytes<RefreshRequest>();
-                }
-                catch (Exception e)
-                {
-                    Events.ErrorParsingMethodRequest(e);
-                    return new DirectMethodResponse(e, HttpStatusCode.BadRequest);
-                }
-
-                try
-                {
-                    Events.RefreshingServiceIdentities(refreshRequest.DeviceIds);
-                    await this.deviceScopeIdentitiesCache.RefreshServiceIdentities(refreshRequest.DeviceIds);
-                    Events.RefreshedServiceIdentities(refreshRequest.DeviceIds);
-                    return new DirectMethodResponse(request.CorrelationId, null, (int)HttpStatusCode.OK);
-                }
-                catch (Exception e)
-                {
-                    Events.ErrorRefreshingServiceIdentities(e);
-                    return new DirectMethodResponse(e, HttpStatusCode.InternalServerError);
-                }
+                return await this.HandleRefreshRequestMethodInvocation(request);
+            }
+            else if (request.Name.Equals(Constants.LogLevelChangeMethodName, StringComparison.OrdinalIgnoreCase))
+            {
+                return this.HandleLogLevelUpdateMethodRequest(request);
             }
             else
             {
@@ -189,6 +173,60 @@ namespace Microsoft.Azure.Devices.Edge.Hub.Core
             Task methodsSubscriptionTask = edgeHub.AddSubscription(edgeHubIdentity.Id, DeviceSubscription.Methods);
             Task clearDeviceConnectionStatusesTask = edgeHubConnection.ClearDeviceConnectionStatuses();
             return Task.WhenAll(addDeviceConnectionTask, desiredPropertyUpdatesSubscriptionTask, methodsSubscriptionTask, clearDeviceConnectionStatusesTask);
+        }
+
+        DirectMethodResponse HandleLogLevelUpdateMethodRequest(DirectMethodRequest request)
+        {
+            LogLevelUpdateRequest logLevelUpdateRequest;
+            try
+            {
+                logLevelUpdateRequest = request.Data.FromBytes<LogLevelUpdateRequest>();
+            }
+            catch (Exception e)
+            {
+                Events.ErrorParsingLogLevelUpdateRequest(e);
+                return new DirectMethodResponse(e, HttpStatusCode.BadRequest);
+            }
+
+            try
+            {
+                Events.UpdatingLogLevel(logLevelUpdateRequest.LogLevel);
+                Logger.SetLogLevel(logLevelUpdateRequest.LogLevel);
+                Events.UpdatedLogLevel(logLevelUpdateRequest.LogLevel);
+                return new DirectMethodResponse(request.CorrelationId, null, (int)HttpStatusCode.OK);
+            }
+            catch (Exception e)
+            {
+                Events.ErrorUpdatingLogLevel(e);
+                return new DirectMethodResponse(e, HttpStatusCode.InternalServerError);
+            }
+        }
+
+        async Task<DirectMethodResponse> HandleRefreshRequestMethodInvocation(DirectMethodRequest request)
+        {
+            RefreshRequest refreshRequest;
+            try
+            {
+                refreshRequest = request.Data.FromBytes<RefreshRequest>();
+            }
+            catch (Exception e)
+            {
+                Events.ErrorParsingMethodRequest(e);
+                return new DirectMethodResponse(e, HttpStatusCode.BadRequest);
+            }
+
+            try
+            {
+                Events.RefreshingServiceIdentities(refreshRequest.DeviceIds);
+                await this.deviceScopeIdentitiesCache.RefreshServiceIdentities(refreshRequest.DeviceIds);
+                Events.RefreshedServiceIdentities(refreshRequest.DeviceIds);
+                return new DirectMethodResponse(request.CorrelationId, null, (int)HttpStatusCode.OK);
+            }
+            catch (Exception e)
+            {
+                Events.ErrorRefreshingServiceIdentities(e);
+                return new DirectMethodResponse(e, HttpStatusCode.InternalServerError);
+            }
         }
 
         // This method updates local state and should be called only after acquiring edgeHubConfigLock
@@ -260,7 +298,7 @@ namespace Microsoft.Azure.Devices.Edge.Hub.Core
                 {
                     Option<EdgeHubConfig> edgeHubConfig = await this.lastDesiredProperties
                         .Map(e => this.PatchDesiredProperties(e, twinCollection))
-                        .GetOrElse(() => this.GetConfigInternal());
+                        .GetOrElse(this.GetConfigInternal);
 
                     await edgeHubConfig.ForEachAsync(
                         async config =>
@@ -531,7 +569,11 @@ namespace Microsoft.Azure.Devices.Edge.Hub.Core
                 RefreshedServiceIdentities,
                 InvalidMethodRequest,
                 SkipUpdatingEdgeHubIdentity,
-                MethodRequestReceived
+                MethodRequestReceived,
+                UpdatedLogLevel,
+                UpdatingLogLevel,
+                ErrorUpdatingLogLevel,
+                ErrorParsingLogLevelUpdateRequest
             }
 
             public static void ErrorGettingEdgeHubConfig(Exception ex)
@@ -582,6 +624,26 @@ namespace Microsoft.Azure.Devices.Edge.Hub.Core
             public static void SkipUpdatingEdgeHubIdentity(string id, ConnectionStatus connectionStatus)
             {
                 Log.LogDebug((int)EventIds.SkipUpdatingEdgeHubIdentity, Invariant($"Skipped updating connection status change to {connectionStatus} for {id}"));
+            }
+
+            public static void ErrorParsingLogLevelUpdateRequest(Exception ex)
+            {
+                Log.LogWarning((int)EventIds.ErrorParsingLogLevelUpdateRequest, ex, Invariant($"Error parsing log level update request"));
+            }
+
+            public static void UpdatingLogLevel(string logLevel)
+            {
+                Log.LogInformation((int)EventIds.UpdatingLogLevel, Invariant($"Updating log level to {logLevel}"));
+            }
+
+            public static void UpdatedLogLevel(string logLevel)
+            {
+                Log.LogDebug((int)EventIds.UpdatedLogLevel, Invariant($"Updated log level to {logLevel}"));
+            }
+
+            public static void ErrorUpdatingLogLevel(Exception ex)
+            {
+                Log.LogWarning((int)EventIds.ErrorUpdatingLogLevel, ex, Invariant($"Error updating log level"));
             }
 
             internal static void Initialized(IIdentity edgeHubIdentity)
@@ -659,6 +721,18 @@ namespace Microsoft.Azure.Devices.Edge.Hub.Core
             {
                 Log.LogDebug((int)EventIds.UpdatingDeviceConnectionStatus, Invariant($"Updating device {deviceId} connection status to {connectionStatus}"));
             }
+        }
+
+        class LogLevelUpdateRequest
+        {
+            [JsonConstructor]
+            public LogLevelUpdateRequest(string logLevel)
+            {
+                this.LogLevel = Preconditions.CheckNonWhiteSpace(logLevel, nameof(logLevel));
+            }
+
+            [JsonProperty("logLevel")]
+            public string LogLevel { get; }
         }
 
         class RefreshRequest

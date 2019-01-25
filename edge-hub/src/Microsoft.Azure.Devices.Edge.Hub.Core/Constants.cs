@@ -18,6 +18,8 @@ namespace Microsoft.Azure.Devices.Edge.Hub.Core
 
         public const string IotEdgeIdentityCapability = "iotEdge";
         public const string ServiceIdentityRefreshMethodName = "RefreshDeviceScopeIdentityCache";
+        public const string LogLevelChangeMethodName = "UpdateLogLevel";
+
         public static readonly Version ConfigSchemaVersion = new Version("1.0");
     }
 }
