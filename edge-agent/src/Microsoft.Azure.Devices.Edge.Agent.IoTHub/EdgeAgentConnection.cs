@@ -333,7 +333,8 @@ namespace Microsoft.Azure.Devices.Edge.Agent.IoTHub
                 TwinRefreshStart,
                 ErrorUpdatingLogLevel,
                 UpdatedLogLevel,
-                UpdatingLogLevel
+                UpdatingLogLevel,
+                ErrorParsingLogLevelUpdateRequest
             }
 
             public static void DesiredPropertiesPatchFailed(Exception exception)
