@@ -37,8 +37,12 @@ namespace Microsoft.Azure.Devices.Edge.Agent.IoTHub
             ConnectionStatusChangesHandler statusChangedHandler,
             Func<ModuleClient, Task> initialize,
             Option<IWebProxy> proxy,
-            Option<string> productInfo) =>
-            Create(upstreamProtocol, initialize, u => CreateAndOpenDeviceClient(u, connectionString, statusChangedHandler, proxy, productInfo));
+            Option<string> productInfo,
+            ITokenProvider tokenProvider,
+            string iothub,
+            string deviceId,
+            string moduleId) =>
+            Create(upstreamProtocol, initialize, u => CreateAndOpenDeviceClient(u, connectionString, statusChangedHandler, proxy, productInfo, tokenProvider, iothub, deviceId, moduleId));
 
         public Task SetDesiredPropertyUpdateCallbackAsync(DesiredPropertyUpdateCallback onDesiredPropertyChanged) =>
             this.deviceClient.SetDesiredPropertyUpdateCallbackAsync(onDesiredPropertyChanged, null);
@@ -145,13 +149,21 @@ namespace Microsoft.Azure.Devices.Edge.Agent.IoTHub
             Option<string> connectionString,
             ConnectionStatusChangesHandler statusChangedHandler,
             Option<IWebProxy> proxy,
-            Option<string> productInfo)
-        {
+            Option<string> productInfo,
+            ITokenProvider tokenProvider,
+            string iothub,
+            string deviceId,
+            string moduleId)
+        {            
             ITransportSettings settings = GetTransportSettings(upstreamProtocol, proxy);
             Events.AttemptingConnectionWithTransport(settings.GetTransportType());
             Client.ModuleClient deviceClient = await connectionString
                 .Map(cs => Task.FromResult(Client.ModuleClient.CreateFromConnectionString(cs, new[] { settings })))
-                .GetOrElse(() => Client.ModuleClient.CreateFromEnvironmentAsync(new[] { settings }));
+                .GetOrElse(() =>
+                {
+                    var authenticator = new ModuleAuthentication(tokenProvider, deviceId, moduleId);
+                    return Task.FromResult(Client.ModuleClient.Create(iothub, authenticator, new[] { settings }));
+                });
             productInfo.ForEach(p => deviceClient.ProductInfo = p);
             await OpenAsync(statusChangedHandler, deviceClient);
             Events.ConnectedWithTransport(settings.GetTransportType());

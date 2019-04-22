@@ -47,6 +47,7 @@ namespace Microsoft.Azure.Devices.Edge.Hub.Service.Modules
         readonly Option<TimeSpan> minTwinSyncPeriod;
         readonly Option<TimeSpan> reportedPropertiesSyncFrequency;
         readonly bool useV1TwinManager;
+        readonly bool enableConnectivityChecks;
 
         public RoutingModule(
             string iotHubName,
@@ -67,7 +68,8 @@ namespace Microsoft.Azure.Devices.Edge.Hub.Service.Modules
             TimeSpan operationTimeout,
             Option<TimeSpan> minTwinSyncPeriod,
             Option<TimeSpan> reportedPropertiesSyncFrequency,
-            bool useV1TwinManager)
+            bool useV1TwinManager,
+            bool enableConnectivityChecks)
         {
             this.iotHubName = Preconditions.CheckNonWhiteSpace(iotHubName, nameof(iotHubName));
             this.edgeDeviceId = Preconditions.CheckNonWhiteSpace(edgeDeviceId, nameof(edgeDeviceId));
@@ -88,6 +90,7 @@ namespace Microsoft.Azure.Devices.Edge.Hub.Service.Modules
             this.minTwinSyncPeriod = minTwinSyncPeriod;
             this.reportedPropertiesSyncFrequency = reportedPropertiesSyncFrequency;
             this.useV1TwinManager = useV1TwinManager;
+            this.enableConnectivityChecks = enableConnectivityChecks;
         }
 
         protected override void Load(ContainerBuilder builder)
@@ -162,7 +165,9 @@ namespace Microsoft.Azure.Devices.Edge.Hub.Service.Modules
                     c =>
                     {
                         var edgeHubCredentials = c.ResolveNamed<IClientCredentials>("EdgeHubCredentials");
-                        IDeviceConnectivityManager deviceConnectivityManager = new DeviceConnectivityManager(this.connectivityCheckFrequency, TimeSpan.FromMinutes(2), edgeHubCredentials.Identity);
+                        IDeviceConnectivityManager deviceConnectivityManager = this.enableConnectivityChecks
+                            ? new DeviceConnectivityManager(this.connectivityCheckFrequency, TimeSpan.FromMinutes(2), edgeHubCredentials.Identity)
+                            : new NullDeviceConnectivityManager() as IDeviceConnectivityManager;
                         return deviceConnectivityManager;
                     })
                 .As<IDeviceConnectivityManager>()

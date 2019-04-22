@@ -26,6 +26,6 @@ namespace Microsoft.Azure.Devices.Edge.Agent.IoTHub
         public Task<IModuleClient> Create(
             ConnectionStatusChangesHandler statusChangedHandler,
             Func<IModuleClient, Task> initialize) =>
-            ModuleClient.Create(Option.Some(this.edgeAgentConnectionString), this.upstreamProtocol, statusChangedHandler, initialize, this.proxy, this.productInfo);
+            ModuleClient.Create(Option.Some(this.edgeAgentConnectionString), this.upstreamProtocol, statusChangedHandler, initialize, this.proxy, this.productInfo, null, null, null, null);
     }
 }

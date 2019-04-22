@@ -171,7 +171,7 @@ namespace Microsoft.Azure.Devices.Edge.Hub.Service.Modules
                 .SingleInstance();
 
             // ITokenProvider
-            builder.Register(c => new ClientTokenProvider(c.Resolve<ISignatureProvider>(), this.iothubHostName, this.edgeDeviceId, this.edgeHubModuleId, TimeSpan.FromHours(1)))
+            builder.Register(c => new ClientTokenProvider(c.Resolve<ISignatureProvider>(), this.iothubHostName, this.edgeDeviceId, this.edgeHubModuleId, TimeSpan.FromHours(12)))
                 .Named<ITokenProvider>("EdgeHubClientAuthTokenProvider")
                 .SingleInstance();
 

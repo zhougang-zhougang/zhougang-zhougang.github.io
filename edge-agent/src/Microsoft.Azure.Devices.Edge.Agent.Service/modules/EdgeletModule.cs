@@ -14,7 +14,9 @@ namespace Microsoft.Azure.Devices.Edge.Agent.Service.Modules
     using Microsoft.Azure.Devices.Edge.Agent.IoTHub;
     using Microsoft.Azure.Devices.Edge.Storage;
     using Microsoft.Azure.Devices.Edge.Util;
+    using Microsoft.Azure.Devices.Edge.Util.Edged;
     using Microsoft.Extensions.Logging;
+    using Newtonsoft.Json.Serialization;
     using ModuleIdentityLifecycleManager = Microsoft.Azure.Devices.Edge.Agent.Edgelet.ModuleIdentityLifecycleManager;
 
     /// <summary>
@@ -33,6 +35,7 @@ namespace Microsoft.Azure.Devices.Edge.Agent.Service.Modules
         readonly Option<UpstreamProtocol> upstreamProtocol;
         readonly Option<IWebProxy> proxy;
         readonly Option<string> productInfo;
+        readonly string generationId;
 
         public EdgeletModule(
             string iotHubHostname,
@@ -43,7 +46,8 @@ namespace Microsoft.Azure.Devices.Edge.Agent.Service.Modules
             IEnumerable<AuthConfig> dockerAuthConfig,
             Option<UpstreamProtocol> upstreamProtocol,
             Option<IWebProxy> proxy,
-            Option<string> productInfo)
+            Option<string> productInfo,
+            string generationId)
         {
             this.iotHubHostName = Preconditions.CheckNonWhiteSpace(iotHubHostname, nameof(iotHubHostname));
             this.gatewayHostName = Preconditions.CheckNonWhiteSpace(gatewayHostName, nameof(gatewayHostName));
@@ -54,12 +58,18 @@ namespace Microsoft.Azure.Devices.Edge.Agent.Service.Modules
             this.upstreamProtocol = Preconditions.CheckNotNull(upstreamProtocol, nameof(upstreamProtocol));
             this.proxy = Preconditions.CheckNotNull(proxy, nameof(proxy));
             this.productInfo = productInfo;
+            this.generationId = generationId;
         }
 
         protected override void Load(ContainerBuilder builder)
         {
             // IModuleClientProvider
-            builder.Register(c => new EnvironmentModuleClientProvider(this.upstreamProtocol, this.proxy, this.productInfo))
+            builder.Register(c =>
+                {
+                    ISignatureProvider signatureProvider = new HttpHsmSignatureProvider(Constants.EdgeAgentModuleIdentityName, this.generationId, this.workloadUri.ToString(), Constants.WorkloadApiVersion);
+                    ITokenProvider tokenProvider = new ClientTokenProvider(signatureProvider, this.iotHubHostName, this.deviceId, Constants.EdgeAgentModuleIdentityName, TimeSpan.FromHours(12));
+                    return new EnvironmentModuleClientProvider(this.upstreamProtocol, this.proxy, this.productInfo, tokenProvider, this.iotHubHostName, this.deviceId, Constants.EdgeAgentModuleIdentityName);
+                })
                 .As<IModuleClientProvider>()
                 .SingleInstance();
 

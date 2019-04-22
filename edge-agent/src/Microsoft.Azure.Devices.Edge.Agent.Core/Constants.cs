@@ -81,6 +81,8 @@ namespace Microsoft.Azure.Devices.Edge.Agent.Core
 
         public const string EdgeletInitializationVectorFileName = "IOTEDGE_BACKUP_IV";
 
+        public const string WorkloadApiVersion = "2018-06-28";
+
         public static class Labels
         {
             public const string Version = "net.azure-devices.edge.version";
