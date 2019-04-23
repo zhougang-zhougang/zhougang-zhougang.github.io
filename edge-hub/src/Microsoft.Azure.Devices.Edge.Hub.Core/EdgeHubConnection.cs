@@ -185,10 +185,10 @@ namespace Microsoft.Azure.Devices.Edge.Hub.Core
         {
             IDeviceProxy deviceProxy = new EdgeHubDeviceProxy(edgeHubConnection);
             Task addDeviceConnectionTask = connectionManager.AddDeviceConnection(edgeHubIdentity, deviceProxy);
-            Task desiredPropertyUpdatesSubscriptionTask = edgeHub.AddSubscription(edgeHubIdentity.Id, DeviceSubscription.DesiredPropertyUpdates);
-            Task methodsSubscriptionTask = edgeHub.AddSubscription(edgeHubIdentity.Id, DeviceSubscription.Methods);
+            //Task desiredPropertyUpdatesSubscriptionTask = edgeHub.AddSubscription(edgeHubIdentity.Id, DeviceSubscription.DesiredPropertyUpdates);
+            //Task methodsSubscriptionTask = edgeHub.AddSubscription(edgeHubIdentity.Id, DeviceSubscription.Methods);
             Task clearDeviceConnectionStatusesTask = edgeHubConnection.ClearDeviceConnectionStatuses();
-            return Task.WhenAll(addDeviceConnectionTask, desiredPropertyUpdatesSubscriptionTask, methodsSubscriptionTask, clearDeviceConnectionStatusesTask);
+            return Task.WhenAll(addDeviceConnectionTask, clearDeviceConnectionStatusesTask);
         }
 
         // This method updates local state and should be called only after acquiring edgeHubConfigLock

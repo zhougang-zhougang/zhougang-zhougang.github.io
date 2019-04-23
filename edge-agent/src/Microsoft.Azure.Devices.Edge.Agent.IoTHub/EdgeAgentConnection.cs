@@ -24,11 +24,11 @@ namespace Microsoft.Azure.Devices.Edge.Agent.IoTHub
         static readonly TimeSpan DeviceClientInitializationWaitTime = TimeSpan.FromSeconds(5);
         readonly AsyncLock twinLock = new AsyncLock();
         readonly ISerde<DeploymentConfig> desiredPropertiesSerDe;
-        readonly Task initTask;
         readonly RetryStrategy retryStrategy;
         readonly Timer refreshTimer;
+        readonly EdgeAgentModuleClient edgeAgentModuleClient;
+        readonly Task initTask;
 
-        Option<IModuleClient> deviceClient;
         TwinCollection desiredProperties;
         Option<TwinCollection> reportedProperties;
         Option<DeploymentConfigInfo> deploymentConfigInfo;
@@ -62,12 +62,12 @@ namespace Microsoft.Azure.Devices.Edge.Agent.IoTHub
             this.desiredPropertiesSerDe = Preconditions.CheckNotNull(desiredPropertiesSerDe, nameof(desiredPropertiesSerDe));
             this.deploymentConfigInfo = Option.None<DeploymentConfigInfo>();
             this.reportedProperties = Option.None<TwinCollection>();
-            this.deviceClient = Option.None<IModuleClient>();
+
             this.retryStrategy = Preconditions.CheckNotNull(retryStrategy, nameof(retryStrategy));
             this.refreshTimer = new Timer(refreshConfigFrequency.TotalMilliseconds);
             this.refreshTimer.Elapsed += (_, __) => this.RefreshTimerElapsed();
+            this.edgeAgentModuleClient = new EdgeAgentModuleClient(moduleClientProvider);
             this.initTask = this.CreateAndInitDeviceClient(Preconditions.CheckNotNull(moduleClientProvider, nameof(moduleClientProvider)));
-
             Events.TwinRefreshInit(refreshConfigFrequency);
         }
 
@@ -81,16 +81,14 @@ namespace Microsoft.Azure.Devices.Edge.Agent.IoTHub
 
         public void Dispose()
         {
-            this.deviceClient.ForEach(d => d.Dispose());
+            //this.deviceClient.ForEach(d => d.Dispose());
             this.refreshTimer?.Dispose();
         }
 
         public async Task UpdateReportedPropertiesAsync(TwinCollection patch)
         {
-            if (await this.WaitForDeviceClientInitialization())
-            {
-                await this.deviceClient.ForEachAsync(d => d.UpdateReportedPropertiesAsync(patch));
-            }
+            IModuleClient mc = await this.edgeAgentModuleClient.GetModuleClient();
+            await mc.UpdateReportedPropertiesAsync(patch);
         }
 
         internal static void ValidateSchemaVersion(string schemaVersion)
@@ -121,41 +119,41 @@ namespace Microsoft.Azure.Devices.Edge.Agent.IoTHub
 
         async Task CreateAndInitDeviceClient(IModuleClientProvider moduleClientProvider)
         {
-            using (await this.twinLock.LockAsync())
-            {
-                IModuleClient dc = await moduleClientProvider.Create(
-                    this.OnConnectionStatusChanged,
-                    async d =>
-                    {
-                        await d.SetDesiredPropertyUpdateCallbackAsync(this.OnDesiredPropertiesUpdated);
-                        await d.SetMethodHandlerAsync(PingMethodName, this.PingMethodCallback);
-                    });
-                this.deviceClient = Option.Some(dc);
+            //using (await this.twinLock.LockAsync())
+            //{
+            //    IModuleClient dc = await moduleClientProvider.Create(
+            //        this.OnConnectionStatusChanged,
+            //        async d =>
+            //        {
+            //            //await d.SetDesiredPropertyUpdateCallbackAsync(this.OnDesiredPropertiesUpdated);
+            //            //await d.SetMethodHandlerAsync(PingMethodName, this.PingMethodCallback);
+            //            await Task.CompletedTask;
+            //        });
+            //    this.deviceClient = Option.Some(dc);
 
-                await this.RefreshTwinAsync();
-            }
+            await this.RefreshTwinAsync();           
         }
 
         Task<MethodResponse> PingMethodCallback(MethodRequest methodRequest, object userContext) => PingMethodResponse;
 
-        async void OnConnectionStatusChanged(ConnectionStatus status, ConnectionStatusChangeReason reason)
-        {
-            try
-            {
-                Events.ConnectionStatusChanged(status, reason);
-                if (this.initTask.IsCompleted && status == ConnectionStatus.Connected)
-                {
-                    using (await this.twinLock.LockAsync())
-                    {
-                        await this.RefreshTwinAsync();
-                    }
-                }
-            }
-            catch (Exception ex) when (!ex.IsFatal())
-            {
-                Events.ConnectionStatusChangedHandlingError(ex);
-            }
-        }
+        //async void OnConnectionStatusChanged(ConnectionStatus status, ConnectionStatusChangeReason reason)
+        //{
+        //    try
+        //    {
+        //        Events.ConnectionStatusChanged(status, reason);
+        //        if (this.initTask.IsCompleted && status == ConnectionStatus.Connected)
+        //        {
+        //            using (await this.twinLock.LockAsync())
+        //            {
+        //                await this.RefreshTwinAsync();
+        //            }
+        //        }
+        //    }
+        //    catch (Exception ex) when (!ex.IsFatal())
+        //    {
+        //        Events.ConnectionStatusChangedHandlingError(ex);
+        //    }
+        //}
 
         async Task OnDesiredPropertiesUpdated(TwinCollection desiredPropertiesPatch, object userContext)
         {
@@ -186,7 +184,8 @@ namespace Microsoft.Azure.Devices.Edge.Agent.IoTHub
                 // recover from this situation
                 var retryPolicy = new RetryPolicy(AllButFatalErrorDetectionStrategy, this.retryStrategy);
                 retryPolicy.Retrying += (_, args) => Events.RetryingGetTwin(args);
-                IModuleClient dc = this.deviceClient.Expect(() => new InvalidOperationException("DeviceClient not yet initialized"));
+                // IModuleClient dc = this.deviceClient.Expect(() => new InvalidOperationException("DeviceClient not yet initialized"));
+                IModuleClient dc = await this.edgeAgentModuleClient.GetModuleClient();
                 Twin twin = await retryPolicy.ExecuteAsync(() => dc.GetTwinAsync());
 
                 this.desiredProperties = twin.Properties.Desired;
@@ -267,6 +266,60 @@ namespace Microsoft.Azure.Devices.Edge.Agent.IoTHub
 
         async Task<bool> WaitForDeviceClientInitialization() =>
             await Task.WhenAny(this.initTask, Task.Delay(DeviceClientInitializationWaitTime)) == this.initTask;
+
+        class EdgeAgentModuleClient
+        {
+            readonly IModuleClientProvider moduleClientProvider;
+            readonly Timer timer;
+            readonly AsyncLock alock = new AsyncLock();
+            IModuleClient moduleClient;
+
+            public EdgeAgentModuleClient(IModuleClientProvider moduleClientProvider)
+            {
+                this.moduleClientProvider = moduleClientProvider;
+                this.timer = new Timer(5 * 60 * 1000);
+                this.timer.AutoReset = true;
+                this.timer.Elapsed += this.TimerOnElapsed;                
+            }
+
+            async void TimerOnElapsed(object sender, ElapsedEventArgs e)
+            {
+                try
+                {
+                    using (await this.alock.LockAsync())
+                    {
+                        Console.WriteLine($"Closing moduleClient");
+                        await (this.moduleClient?.CloseAsync() ?? Task.CompletedTask);
+                        this.moduleClient = null;
+                        Console.WriteLine($"Closed moduleClient");
+                    }
+                }
+                catch (Exception exception)
+                {
+                    Console.WriteLine($"Error closing moduleClient - {exception}");
+                    throw;
+                }
+            }
+
+            public async Task<IModuleClient> GetModuleClient()
+            {
+                using (await this.alock.LockAsync())
+                {
+                    if(this.moduleClient == null)
+                    {
+                        Console.WriteLine($"Creating new moduleClient");
+                        this.moduleClient = await this.moduleClientProvider.Create(null,null);
+                        this.timer.Start();
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Found existing moduleClient");
+                    }
+                }
+
+                return this.moduleClient;
+            }
+        }
 
         static class Events
         {

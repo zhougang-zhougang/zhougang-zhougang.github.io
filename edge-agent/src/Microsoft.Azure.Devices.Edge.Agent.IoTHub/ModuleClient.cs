@@ -56,6 +56,8 @@ namespace Microsoft.Azure.Devices.Edge.Agent.IoTHub
 
         public Task UpdateReportedPropertiesAsync(TwinCollection reportedProperties) => this.deviceClient.UpdateReportedPropertiesAsync(reportedProperties);
 
+        public Task CloseAsync() => this.deviceClient.CloseAsync();
+
         internal static Task<Client.ModuleClient> CreateDeviceClientForUpstreamProtocol(
             Option<UpstreamProtocol> upstreamProtocol,
             Func<UpstreamProtocol, Task<Client.ModuleClient>> deviceClientCreator)

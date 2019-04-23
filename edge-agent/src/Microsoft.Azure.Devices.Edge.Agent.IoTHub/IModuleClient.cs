@@ -15,5 +15,7 @@ namespace Microsoft.Azure.Devices.Edge.Agent.IoTHub
         Task<Twin> GetTwinAsync();
 
         Task UpdateReportedPropertiesAsync(TwinCollection reportedProperties);
+
+        Task CloseAsync();
     }
 }
