@@ -7,10 +7,7 @@ namespace Microsoft.Azure.Devices.Edge.Hub.Service
     using Microsoft.AspNetCore.Builder;
     using Microsoft.AspNetCore.Hosting;
     using Microsoft.AspNetCore.Mvc;
-    using Microsoft.Azure.Devices.Client;
-    using Microsoft.Azure.Devices.Edge.Hub.Core;
     using Microsoft.Azure.Devices.Edge.Hub.Http;
-    using Microsoft.Azure.Devices.Edge.Hub.Http.Middleware;
     using Microsoft.Azure.Devices.Edge.Util;
     using Microsoft.Extensions.Configuration;
     using Microsoft.Extensions.DependencyInjection;
@@ -47,26 +44,23 @@ namespace Microsoft.Azure.Devices.Edge.Hub.Service
         {
             app.UseWebSockets();
 
-            var webSocketListenerRegistry = app.ApplicationServices.GetService(typeof(IWebSocketListenerRegistry)) as IWebSocketListenerRegistry;
-            app.UseWebSocketHandlingMiddleware(webSocketListenerRegistry);
-
-            string edgeHubConnectionString = this.configuration.GetValue<string>(Constants.ConfigKey.IotHubConnectionString);
-            string iotHubHostname;
-            string edgeDeviceId;
-            if (!string.IsNullOrWhiteSpace(edgeHubConnectionString))
-            {
-                IotHubConnectionStringBuilder iotHubConnectionStringBuilder = IotHubConnectionStringBuilder.Create(edgeHubConnectionString);
-                iotHubHostname = iotHubConnectionStringBuilder.HostName;
-                edgeDeviceId = iotHubConnectionStringBuilder.DeviceId;
-            }
-            else
-            {
-                iotHubHostname = this.configuration.GetValue<string>(Constants.ConfigKey.IotHubHostname);
-                edgeDeviceId = this.configuration.GetValue<string>(Constants.ConfigKey.DeviceId);
-            }
-
-            app.UseAuthenticationMiddleware(iotHubHostname, edgeDeviceId);
-
+            // var webSocketListenerRegistry = app.ApplicationServices.GetService(typeof(IWebSocketListenerRegistry)) as IWebSocketListenerRegistry;
+            // app.UseWebSocketHandlingMiddleware(webSocketListenerRegistry);
+            // string edgeHubConnectionString = this.configuration.GetValue<string>(Constants.ConfigKey.IotHubConnectionString);
+            // string iotHubHostname;
+            // string edgeDeviceId;
+            // if (!string.IsNullOrWhiteSpace(edgeHubConnectionString))
+            // {
+            //    IotHubConnectionStringBuilder iotHubConnectionStringBuilder = IotHubConnectionStringBuilder.Create(edgeHubConnectionString);
+            //    iotHubHostname = iotHubConnectionStringBuilder.HostName;
+            //    edgeDeviceId = iotHubConnectionStringBuilder.DeviceId;
+            // }
+            // else
+            // {
+            //     iotHubHostname = this.configuration.GetValue<string>(Constants.ConfigKey.IotHubHostname);
+            //     edgeDeviceId = this.configuration.GetValue<string>(Constants.ConfigKey.DeviceId);
+            // }
+            // app.UseAuthenticationMiddleware(iotHubHostname, edgeDeviceId);
             app.Use(
                 async (context, next) =>
                 {
