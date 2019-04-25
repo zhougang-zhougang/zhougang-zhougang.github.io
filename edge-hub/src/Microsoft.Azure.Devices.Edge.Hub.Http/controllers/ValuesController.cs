@@ -1,9 +1,8 @@
 // Copyright (c) Microsoft. All rights reserved.
-using Microsoft.AspNetCore.Mvc;
-
 namespace Microsoft.Azure.Devices.Edge.Hub.Http.Controllers
 {
     using System.Collections.Generic;
+    using Microsoft.AspNetCore.Mvc;
 
     [Route("api/[controller]")]
     [ApiController]
