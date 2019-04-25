@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft. All rights reserved.
 namespace Microsoft.Azure.Devices.Edge.Hub.Http.Controllers
 {
+    using System;
     using System.Net;
     using System.Text;
     using System.Threading.Tasks;
@@ -40,6 +41,7 @@ namespace Microsoft.Azure.Devices.Edge.Hub.Http.Controllers
         [Route("twins/{deviceId}/methods")]
         public Task<IActionResult> InvokeDeviceMethodAsync([FromRoute] string deviceId, [FromBody] MethodRequest methodRequest)
         {
+            Console.WriteLine($"Received method invocation in controller action!");
             deviceId = WebUtility.UrlDecode(Preconditions.CheckNonWhiteSpace(deviceId, nameof(deviceId)));
             this.validator.Validate(methodRequest);
 
@@ -51,6 +53,7 @@ namespace Microsoft.Azure.Devices.Edge.Hub.Http.Controllers
         [Route("twins/{deviceId}/modules/{moduleId}/methods")]
         public Task<IActionResult> InvokeModuleMethodAsync([FromRoute] string deviceId, [FromRoute] string moduleId, [FromBody] MethodRequest methodRequest)
         {
+            Console.WriteLine($"Received method invocation in controller action!");
             deviceId = WebUtility.UrlDecode(Preconditions.CheckNonWhiteSpace(deviceId, nameof(deviceId)));
             moduleId = WebUtility.UrlDecode(Preconditions.CheckNonWhiteSpace(moduleId, nameof(moduleId)));
             this.validator.Validate(methodRequest);
