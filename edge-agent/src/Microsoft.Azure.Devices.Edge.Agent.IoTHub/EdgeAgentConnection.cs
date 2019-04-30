@@ -118,7 +118,6 @@ namespace Microsoft.Azure.Devices.Edge.Agent.IoTHub
                     this.OnConnectionStatusChanged,
                     async d =>
                     {
-                        await d.SetDesiredPropertyUpdateCallbackAsync(this.OnDesiredPropertiesUpdated);
                         await d.SetMethodHandlerAsync(PingMethodName, this.PingMethodCallback);
                     });
                 this.deviceClient = Option.Some(dc);
