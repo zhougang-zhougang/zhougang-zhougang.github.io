@@ -137,7 +137,7 @@ namespace Microsoft.Azure.Devices.Edge.Agent.IoTHub
                 {
                     using (await this.twinLock.LockAsync())
                     {
-                        await this.RefreshTwinAsync();
+                        await Task.CompletedTask;
                     }
                 }
             }
